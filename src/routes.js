@@ -264,19 +264,11 @@ function checkRootAdminOverride(request, JWT_TOKEN) {
     }
     const auth = request.headers.get('Authorization') || request.headers.get('authorization') || '';
     const xToken = request.headers.get('X-Admin-Token') || request.headers.get('x-admin-token') || '';
-    let urlToken = '';
-    try {
-      const u = new URL(request.url);
-      urlToken = u.searchParams.get('admin_token') || '';
-    } catch (err) { void err; }
     const bearer = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
     if (bearer && bearer === JWT_TOKEN) {
       return { role: 'admin', username: '__root__', userId: 0 };
     }
     if (xToken && xToken === JWT_TOKEN) {
-      return { role: 'admin', username: '__root__', userId: 0 };
-    }
-    if (urlToken && urlToken === JWT_TOKEN) {
       return { role: 'admin', username: '__root__', userId: 0 };
     }
     return null;

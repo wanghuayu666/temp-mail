@@ -943,7 +943,8 @@ export async function handleApiRequest(request, db, mailDomains, options = { res
         html: sendPayload.html,
         text: sendPayload.text,
         status: 'delivered',
-        scheduledAt: sendPayload.scheduledAt || null
+        scheduledAt: sendPayload.scheduledAt || null,
+        userId: uidForSend || null
       });
       
       logger.info({ logId, action: 'send_email', result: { sendId: result.id, status: 'delivered' } });
@@ -1002,6 +1003,8 @@ export async function handleApiRequest(request, db, mailDomains, options = { res
         for (let i = 0; i < arr.length; i++) {
           const id = arr[i]?.id;
           const payload = items[i] || {};
+          const batchPayloadUser = getJwtPayload();
+          const batchUid = Number(batchPayloadUser?.userId || 0);
           await recordSentEmail(db, {
             resendId: id || null,
             fromName: payload.fromName || null,
@@ -1011,7 +1014,8 @@ export async function handleApiRequest(request, db, mailDomains, options = { res
             html: payload.html,
             text: payload.text,
             status: 'delivered',
-            scheduledAt: payload.scheduledAt || null
+            scheduledAt: payload.scheduledAt || null,
+            userId: batchUid || null
           });
           recordedCount++;
         }
@@ -1105,7 +1109,12 @@ export async function handleApiRequest(request, db, mailDomains, options = { res
     const id = path.split('/')[3];
     logger.info({ logId, action: 'delete_sent_record', sentId: id });
     try {
-      const result = await db.prepare('DELETE FROM sent_emails WHERE id = ?').bind(id).run();
+      const delPayload = getJwtPayload();
+      const delUid = Number(delPayload?.userId || 0);
+      const isAdmin = delPayload?.role === 'admin';
+      const result = isAdmin
+        ? await db.prepare('DELETE FROM sent_emails WHERE id = ?').bind(id).run()
+        : await db.prepare('DELETE FROM sent_emails WHERE id = ? AND user_id = ?').bind(id, delUid).run();
       const deleted = (result?.meta?.changes || 0) > 0;
       if (deleted) {
         logger.info({ logId, action: 'delete_sent_record', result: { sentId: id, deleted: true } });
@@ -1556,13 +1565,21 @@ export async function handleApiRequest(request, db, mailDomains, options = { res
             type: 'update'
           });
         } else {
-          // 邮箱不存在，创建新邮箱
-          batchStatements.push({
-            stmt: db.prepare('INSERT INTO mailboxes (address, can_login) VALUES (?, ?)')
-              .bind(normalizedAddress, canLogin ? 1 : 0),
-            address: normalizedAddress,
-            type: 'insert'
-          });
+          // 邮箱不存在，创建新邮箱（需包含 local_part 和 domain）
+          const atIdx = normalizedAddress.indexOf('@');
+          if (atIdx > 0 && atIdx < normalizedAddress.length - 1) {
+            const localPart = normalizedAddress.slice(0, atIdx);
+            const domainPart = normalizedAddress.slice(atIdx + 1);
+            batchStatements.push({
+              stmt: db.prepare('INSERT INTO mailboxes (address, local_part, domain, can_login) VALUES (?, ?, ?, ?)')
+                .bind(normalizedAddress, localPart, domainPart, canLogin ? 1 : 0),
+              address: normalizedAddress,
+              type: 'insert'
+            });
+          } else {
+            failCount++;
+            results.push({ address: normalizedAddress, success: false, error: '无效的邮箱格式' });
+          }
         }
       }
       
@@ -1744,8 +1761,8 @@ export async function handleApiRequest(request, db, mailDomains, options = { res
             if (obj) {
               const eml = await obj.text();
               const parsed = parseEmailBody(eml);
-              content = parsed.content || '';
-              html_content = parsed.html_content || '';
+              content = parsed.text || '';
+              html_content = parsed.html || '';
               
               // 如果 R2 中有内容，更新数据库中的预览
               if (content && !row.preview) {
@@ -2061,11 +2078,13 @@ export async function handleEmailReceive(requestOrData, db, env) {
     const previewBase = (text || html.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
     const preview = String(previewBase || '').slice(0, 120);
     let verificationCode = '';
+    let loginLink = '';
     try {
       verificationCode = extractVerificationCode({ subject, text, html });
-      if (!verificationCode) {
-        // 如果未找到验证码，尝试提取登录链接
-        verificationCode = extractLoginLink({ text, html });
+      loginLink = extractLoginLink({ text, html });
+      if (!verificationCode && loginLink) {
+        verificationCode = loginLink;
+        loginLink = '';
       }
     } catch (err) { void err; }
 
@@ -2082,7 +2101,7 @@ export async function handleEmailReceive(requestOrData, db, env) {
       subject || '(无主题)',
       verificationCode || null,
       preview || null,
-      'mail-eml',
+      'temp-mail-eml',
       objectKey || ''
     ).run();
 
@@ -2114,6 +2133,7 @@ export async function handleEmailReceive(requestOrData, db, env) {
           '<b>📥 收件人:</b> ' + escapeHtml(to) + '\n' +
           '<b>📋 主题:</b> ' + escapeHtml(subject) + '\n' +
           (verificationCode ? '<b>🔑 验证码:</b> <code>' + escapeHtml(verificationCode) + '</code>\n' : '') +
+          (loginLink ? '<b>🔗 登录链接:</b> <a href="' + escapeHtml(loginLink) + '">点击登录</a>\n' : '') +
           '\n' + escapeHtml(previewText) + (previewText.length < (text || '').length ? '...' : '');
 
         for (const cid of targetChatIds) {

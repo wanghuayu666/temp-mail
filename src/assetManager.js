@@ -17,7 +17,7 @@ export class AssetManager {
       '/mailboxes.html',
       '/mailbox.html',
       '/html/mailbox.html',
-      '/templates/app.html', 
+      '/html/app.html', 
       '/templates/footer.html', 
       '/templates/loading.html',
       '/templates/loading-inline.html',
@@ -30,7 +30,6 @@ export class AssetManager {
       '/login.css',
       '/mailbox.js',
       '/favicon.svg', 
-      '/route-guard.js',
       '/app-router.js',
       '/app-mobile.js',
       '/app-mobile.css',
@@ -473,113 +472,3 @@ export function createAssetManager() {
   return new AssetManager();
 }
 
-/**
- * 资源安全检查器 - 提供额外的安全检查功能
- */
-export class AssetSecurityChecker {
-  constructor() {
-    // 危险文件扩展名
-    this.dangerousExtensions = new Set([
-      '.php', '.jsp', '.asp', '.aspx', '.py', '.rb', '.pl', '.sh', '.bat', '.cmd',
-      '.exe', '.scr', '.com', '.pif', '.msi', '.dll', '.jar'
-    ]);
-
-    // 危险路径模式
-    this.dangerousPatterns = [
-      /\.\.\//, // 路径遍历
-      /\/\.\./,
-      /\.\.\//,
-      /\/etc\//, // 系统文件
-      /\/proc\//,
-      /\/sys\//,
-      /\/var\/log\//,
-      /\/root\//,
-      /\/home\//,
-      /\.env/, // 环境变量文件
-      /\.git/, // Git 文件
-      /\.svn/, // SVN 文件
-      /\/config\//,
-      /\/admin\//, // 除了允许的admin.html
-      /\/private\//,
-      /\/secret\//
-    ];
-  }
-
-  /**
-   * 检查路径是否安全
-   * @param {string} pathname - 请求路径
-   * @returns {boolean} 是否安全
-   */
-  isPathSafe(pathname) {
-    const normalizedPath = pathname.toLowerCase();
-
-    // 检查危险扩展名
-    for (const ext of this.dangerousExtensions) {
-      if (normalizedPath.endsWith(ext)) {
-        return false;
-      }
-    }
-
-    // 检查危险模式
-    for (const pattern of this.dangerousPatterns) {
-      if (pattern.test(normalizedPath)) {
-        return false;
-      }
-    }
-
-    return true;
-  }
-
-  /**
-   * 检查请求头是否安全
-   * @param {Request} request - HTTP请求对象
-   * @returns {boolean} 是否安全
-   */
-  areHeadersSafe(request) {
-    const userAgent = request.headers.get('User-Agent') || '';
-    const referer = request.headers.get('Referer') || '';
-
-    // 检查可疑的User-Agent
-    const suspiciousUAPatterns = [
-      /bot/i,
-      /crawler/i,
-      /spider/i,
-      /scanner/i,
-      /sqlmap/i,
-      /nikto/i,
-      /nmap/i
-    ];
-
-    for (const pattern of suspiciousUAPatterns) {
-      if (pattern.test(userAgent)) {
-        return false;
-      }
-    }
-
-    return true;
-  }
-
-  /**
-   * 获取安全风险评估
-   * @param {Request} request - HTTP请求对象
-   * @returns {object} 风险评估结果
-   */
-  assessRisk(request) {
-    const url = new URL(request.url);
-    const risks = [];
-
-    if (!this.isPathSafe(url.pathname)) {
-      risks.push('dangerous_path');
-    }
-
-    if (!this.areHeadersSafe(request)) {
-      risks.push('suspicious_headers');
-    }
-
-    return {
-      isHighRisk: risks.length > 0,
-      risks,
-      riskLevel: risks.length === 0 ? 'low' : risks.length === 1 ? 'medium' : 'high'
-    };
-  }
-}

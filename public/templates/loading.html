@@ -65,7 +65,7 @@
           }catch(_){ }
         })();
         // 预加载首页关键资源（模板和脚本），认证后可无缝切换
-        try{ fetch('/templates/app.html', { cache: 'force-cache' }); }catch(_){ }
+        try{ fetch('/html/app.html', { cache: 'force-cache' }); }catch(_){ }
         try{
           const link = document.createElement('link');
           link.rel = 'preload';

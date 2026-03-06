@@ -208,7 +208,7 @@ function bindEvents() {
     }
     
     try {
-      const res = await fetch('/api/password', {
+      const res = await fetch('/api/mailbox/password', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ currentPassword: currentPass, newPassword: newPass })
@@ -242,14 +242,12 @@ async function loadEmails() {
   }
   
   try {
-    const res = await fetch(`/api/emails?page=${currentPage}&pageSize=${pageSize}`);
+    const res = await fetch(`/api/emails?mailbox=${encodeURIComponent(currentMailbox)}&limit=${pageSize}`);
     const data = await res.json();
     
-    if (data.success) {
-      emails = data.emails || [];
-      renderEmailList();
-      updateStats();
-    }
+    emails = Array.isArray(data) ? data : (data?.emails || []);
+    renderEmailList();
+    updateStats();
   } catch (error) {
     console.error('加载邮件失败', error);
     showToast('加载邮件失败', 'error');
@@ -268,7 +266,7 @@ function renderEmailList() {
   let filteredEmails = emails;
   if (keyword) {
     filteredEmails = emails.filter(e => 
-      (e.from && e.from.toLowerCase().includes(keyword)) || 
+      (e.sender && e.sender.toLowerCase().includes(keyword)) || 
       (e.subject && e.subject.toLowerCase().includes(keyword))
     );
   }
@@ -286,14 +284,15 @@ function renderEmailList() {
     el.onclick = () => selectEmail(email);
     
     // 头像颜色
-    const avatarColor = getAvatarColor(email.from);
-    const initials = getInitials(email.from);
-    const dateStr = formatTime(email.created_at);
+    const senderName = email.sender || '';
+    const avatarColor = getAvatarColor(senderName);
+    const initials = getInitials(senderName);
+    const dateStr = formatTime(email.received_at);
     
     el.innerHTML = `
       <div class="email-avatar" style="background: ${avatarColor}">${initials}</div>
       <div class="email-preview">
-        <div class="email-sender">${escapeHtml(email.from)}</div>
+        <div class="email-sender">${escapeHtml(senderName)}</div>
         <div class="email-subject">${escapeHtml(email.subject || '无主题')}</div>
         <div class="email-meta">
           <span>${dateStr}</span>
@@ -329,22 +328,25 @@ function selectEmail(email) {
     elements.detailContent.classList.remove('hidden');
     
     elements.detailSubject.textContent = email.subject || '无主题';
-    elements.detailFrom.textContent = email.from;
-    elements.detailDate.textContent = new Date(email.created_at).toLocaleString();
+    elements.detailFrom.textContent = email.sender || '';
+    elements.detailDate.textContent = new Date(email.received_at).toLocaleString();
     
-    const avatarColor = getAvatarColor(email.from);
+    const senderName = email.sender || '';
+    const avatarColor = getAvatarColor(senderName);
     elements.detailAvatar.style.background = avatarColor;
-    elements.detailAvatar.textContent = getInitials(email.from);
+    elements.detailAvatar.textContent = getInitials(senderName);
     
-    elements.detailBody.innerHTML = email.html || email.text || '<p class="text-muted">无内容</p>';
+    elements.detailBody.innerHTML = email.html_content || email.content || email.preview || '<p class="text-muted">无内容</p>';
   }
 }
 
 function renderDetailToContainer(container, email) {
   if (!container) return;
   
-  const avatarColor = getAvatarColor(email.from);
-  const initials = getInitials(email.from);
+  const senderName = email.sender || '';
+  const avatarColor = getAvatarColor(senderName);
+  const initials = getInitials(senderName);
+  const bodyContent = email.html_content || email.content || email.preview || '';
   
   container.innerHTML = `
     <div class="email-detail-header">
@@ -352,13 +354,13 @@ function renderDetailToContainer(container, email) {
       <div class="detail-meta">
         <div class="email-avatar" style="background: ${avatarColor}">${initials}</div>
         <div class="detail-sender-info">
-          <div class="detail-from">${escapeHtml(email.from)}</div>
-          <div class="detail-time">${new Date(email.created_at).toLocaleString()}</div>
+          <div class="detail-from">${escapeHtml(senderName)}</div>
+          <div class="detail-time">${new Date(email.received_at).toLocaleString()}</div>
         </div>
       </div>
     </div>
     <div class="email-detail-body">
-      ${email.html || email.text || '<p class="text-muted">无内容</p>'}
+      ${bodyContent || '<p class="text-muted">无内容</p>'}
     </div>
   `;
 }

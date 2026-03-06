@@ -56,6 +56,7 @@ async function performFirstTimeSetup(db) {
       await ensureMailboxColumns(db);
       await ensureMessageColumns(db);
       await ensureUserTelegramColumns(db);
+      await ensureSentEmailColumns(db);
     } catch (e) {
       console.error('修复 users 表结构失败:', e);
     }
@@ -72,7 +73,7 @@ async function performFirstTimeSetup(db) {
   await db.exec('CREATE TABLE IF NOT EXISTS blocked_senders (id INTEGER PRIMARY KEY AUTOINCREMENT, pattern TEXT NOT NULL, type TEXT NOT NULL CHECK(type IN (\'email\',\'domain\')), reason TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP);');
   await db.exec('CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE, password_hash TEXT, role TEXT NOT NULL DEFAULT \'user\', can_send INTEGER NOT NULL DEFAULT 0, mailbox_limit INTEGER NOT NULL DEFAULT 10, created_at TEXT DEFAULT CURRENT_TIMESTAMP, telegram_chat_id TEXT, telegram_username TEXT);');
   await db.exec('CREATE TABLE IF NOT EXISTS user_mailboxes (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, mailbox_id INTEGER NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP, is_pinned INTEGER NOT NULL DEFAULT 0, UNIQUE(user_id, mailbox_id), FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY(mailbox_id) REFERENCES mailboxes(id) ON DELETE CASCADE);');
-  await db.exec('CREATE TABLE IF NOT EXISTS sent_emails (id INTEGER PRIMARY KEY AUTOINCREMENT, resend_id TEXT, from_name TEXT, from_addr TEXT NOT NULL, to_addrs TEXT NOT NULL, subject TEXT NOT NULL, html_content TEXT, text_content TEXT, status TEXT DEFAULT \'queued\', scheduled_at TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP);');
+  await db.exec('CREATE TABLE IF NOT EXISTS sent_emails (id INTEGER PRIMARY KEY AUTOINCREMENT, resend_id TEXT, user_id INTEGER, from_name TEXT, from_addr TEXT NOT NULL, to_addrs TEXT NOT NULL, subject TEXT NOT NULL, html_content TEXT, text_content TEXT, status TEXT DEFAULT \'queued\', scheduled_at TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(user_id) REFERENCES users(id));');
   await db.exec('CREATE TABLE IF NOT EXISTS domains (id INTEGER PRIMARY KEY AUTOINCREMENT, domain TEXT NOT NULL UNIQUE, created_at TEXT DEFAULT CURRENT_TIMESTAMP, last_seen_at TEXT DEFAULT CURRENT_TIMESTAMP, is_active INTEGER DEFAULT 1);');
   
   // 创建索引
@@ -92,6 +93,7 @@ async function performFirstTimeSetup(db) {
   await db.exec('CREATE INDEX IF NOT EXISTS idx_sent_emails_resend_id ON sent_emails(resend_id);');
   await db.exec('CREATE INDEX IF NOT EXISTS idx_sent_emails_status_created ON sent_emails(status, created_at DESC);');
   await db.exec('CREATE INDEX IF NOT EXISTS idx_sent_emails_from_addr ON sent_emails(from_addr);');
+  await db.exec('CREATE INDEX IF NOT EXISTS idx_sent_emails_user_id ON sent_emails(user_id);');
   await db.exec('CREATE INDEX IF NOT EXISTS idx_domains_domain ON domains(domain);');
   await db.exec('CREATE INDEX IF NOT EXISTS idx_blocked_senders_pattern ON blocked_senders(pattern);');
   
@@ -126,6 +128,13 @@ async function ensureMailboxColumns(db) {
   }
 }
 
+async function ensureSentEmailColumns(db) {
+  const hasUserId = await hasColumn(db, 'sent_emails', 'user_id');
+  if (!hasUserId) {
+    await db.exec('ALTER TABLE sent_emails ADD COLUMN user_id INTEGER;');
+  }
+}
+
 async function ensureMessageColumns(db) {
   const cols = [
     { name: 'to_addrs', sql: 'ALTER TABLE messages ADD COLUMN to_addrs TEXT NOT NULL DEFAULT \'\';' },
@@ -143,138 +152,6 @@ async function ensureMessageColumns(db) {
   }
 }
 
-/**
- * 完整的数据库设置脚本（用于首次部署）
- * 可通过 wrangler d1 execute 或管理面板执行
- * @param {object} db - 数据库连接对象
- * @returns {Promise<void>}
- */
-export async function setupDatabase(db) {
-  // 临时禁用外键约束，避免创建表时的约束冲突
-  await db.exec('PRAGMA foreign_keys = OFF;');
-  
-  // 创建所有表
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS mailboxes (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      address TEXT NOT NULL UNIQUE,
-      local_part TEXT NOT NULL,
-      domain TEXT NOT NULL,
-      password_hash TEXT,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      last_accessed_at TEXT,
-      expires_at TEXT,
-      is_pinned INTEGER DEFAULT 0,
-      can_login INTEGER DEFAULT 0,
-      retention_days INTEGER
-    );
-  `);
-  
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS messages (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      mailbox_id INTEGER NOT NULL,
-      sender TEXT NOT NULL,
-      to_addrs TEXT NOT NULL DEFAULT '',
-      subject TEXT NOT NULL,
-      verification_code TEXT,
-      preview TEXT,
-      r2_bucket TEXT NOT NULL DEFAULT 'temp-mail-eml',
-      r2_object_key TEXT NOT NULL DEFAULT '',
-      received_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      is_read INTEGER DEFAULT 0,
-      is_pinned INTEGER NOT NULL DEFAULT 0,
-      FOREIGN KEY(mailbox_id) REFERENCES mailboxes(id)
-    );
-  `);
-  
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      username TEXT NOT NULL UNIQUE,
-      password_hash TEXT,
-      role TEXT NOT NULL DEFAULT 'user',
-      can_send INTEGER NOT NULL DEFAULT 0,
-      mailbox_limit INTEGER NOT NULL DEFAULT 10,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      telegram_chat_id TEXT,
-      telegram_username TEXT
-    );
-  `);
-  
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS user_mailboxes (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER NOT NULL,
-      mailbox_id INTEGER NOT NULL,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      is_pinned INTEGER NOT NULL DEFAULT 0,
-      UNIQUE(user_id, mailbox_id),
-      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
-      FOREIGN KEY(mailbox_id) REFERENCES mailboxes(id) ON DELETE CASCADE
-    );
-  `);
-  
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS sent_emails (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      resend_id TEXT,
-      from_name TEXT,
-      from_addr TEXT NOT NULL,
-      to_addrs TEXT NOT NULL,
-      subject TEXT NOT NULL,
-      html_content TEXT,
-      text_content TEXT,
-      status TEXT DEFAULT 'queued',
-      scheduled_at TEXT,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-    );
-  `);
-
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS domains (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      domain TEXT NOT NULL UNIQUE,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      last_seen_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      is_active INTEGER DEFAULT 1
-    );
-  `);
-
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS blocked_senders (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      pattern TEXT NOT NULL,
-      type TEXT NOT NULL CHECK(type IN ('email','domain')),
-      reason TEXT,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP
-    );
-  `);
-  
-  // 创建所有索引
-  await db.exec('CREATE INDEX IF NOT EXISTS idx_mailboxes_address ON mailboxes(address);');
-  await db.exec('CREATE INDEX IF NOT EXISTS idx_mailboxes_is_pinned ON mailboxes(is_pinned DESC);');
-  await db.exec('CREATE INDEX IF NOT EXISTS idx_mailboxes_address_created ON mailboxes(address, created_at DESC);');
-  await db.exec('CREATE INDEX IF NOT EXISTS idx_messages_mailbox_id ON messages(mailbox_id);');
-  await db.exec('CREATE INDEX IF NOT EXISTS idx_messages_received_at ON messages(received_at DESC);');
-  await db.exec('CREATE INDEX IF NOT EXISTS idx_messages_r2_object_key ON messages(r2_object_key);');
-  await db.exec('CREATE INDEX IF NOT EXISTS idx_messages_mailbox_received ON messages(mailbox_id, received_at DESC);');
-  await db.exec('CREATE INDEX IF NOT EXISTS idx_messages_mailbox_received_read ON messages(mailbox_id, received_at DESC, is_read);');
-  await db.exec('CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);');
-  await db.exec('CREATE INDEX IF NOT EXISTS idx_user_mailboxes_user ON user_mailboxes(user_id);');
-  await db.exec('CREATE INDEX IF NOT EXISTS idx_user_mailboxes_mailbox ON user_mailboxes(mailbox_id);');
-  await db.exec('CREATE INDEX IF NOT EXISTS idx_user_mailboxes_user_pinned ON user_mailboxes(user_id, is_pinned DESC);');
-  await db.exec('CREATE INDEX IF NOT EXISTS idx_user_mailboxes_composite ON user_mailboxes(user_id, mailbox_id, is_pinned);');
-  await db.exec('CREATE INDEX IF NOT EXISTS idx_sent_emails_resend_id ON sent_emails(resend_id);');
-  await db.exec('CREATE INDEX IF NOT EXISTS idx_sent_emails_status_created ON sent_emails(status, created_at DESC);');
-  await db.exec('CREATE INDEX IF NOT EXISTS idx_sent_emails_from_addr ON sent_emails(from_addr);');
-  await db.exec('CREATE INDEX IF NOT EXISTS idx_domains_domain ON domains(domain);');
-  await db.exec('CREATE INDEX IF NOT EXISTS idx_blocked_senders_pattern ON blocked_senders(pattern);');
-  
-  // 重新启用外键约束
-  await db.exec('PRAGMA foreign_keys = ON;');
-}
 
 /**
  * 获取或创建邮箱ID，如果邮箱不存在则自动创建
@@ -455,12 +332,12 @@ export async function toggleMailboxPin(db, address, userId) {
  * @param {string} params.scheduledAt - 计划发送时间，默认为null
  * @returns {Promise<void>} 记录完成后无返回值
  */
-export async function recordSentEmail(db, { resendId, fromName, from, to, subject, html, text, status = 'queued', scheduledAt = null }) {
+export async function recordSentEmail(db, { resendId, fromName, from, to, subject, html, text, status = 'queued', scheduledAt = null, userId = null }) {
   const toAddrs = Array.isArray(to) ? to.join(',') : String(to || '');
   await db.prepare(`
-    INSERT INTO sent_emails (resend_id, from_name, from_addr, to_addrs, subject, html_content, text_content, status, scheduled_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(resendId || null, fromName || null, from, toAddrs, subject, html || null, text || null, status, scheduledAt || null).run();
+    INSERT INTO sent_emails (resend_id, user_id, from_name, from_addr, to_addrs, subject, html_content, text_content, status, scheduled_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(resendId || null, userId || null, fromName || null, from, toAddrs, subject, html || null, text || null, status, scheduledAt || null).run();
 }
 
 /**

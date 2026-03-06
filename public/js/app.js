@@ -15,6 +15,8 @@ async function api(path, options){
   return res;
 }
 
+function escapeAttr(s){ return String(s||'').replace(/&/g,'&amp;').replace(/'/g,'&#39;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
 // 将 D1 返回的 UTC 时间（YYYY-MM-DD HH:MM:SS）格式化为东八区显示
 function formatTs(ts){
   if (!ts || typeof ts !== 'string') return '';
@@ -81,7 +83,7 @@ function extractCode(text){
     'i'
   ));
   if (m){
-    const digits = m[1].replace(/\\D/g, '');
+    const digits = m[1].replace(/\D/g, '');
     if (digits.length >= 4 && digits.length <= 8) return digits;
   }
 
@@ -559,14 +561,14 @@ if (els.createCustomOverlay){
       try{
         const createdAt = new Date().toISOString().replace('T',' ').slice(0,19);
         const html = `
-          <div class="mailbox-item" onclick="selectMailbox('${data.email}')">
+          <div class="mailbox-item" onclick="selectMailbox('${escapeAttr(data.email)}')">
             <div class="mailbox-content">
               <span class="address">${data.email}</span>
               <span class="time">${formatTs(createdAt)}</span>
             </div>
             <div class="mailbox-actions">
-              <button class="btn btn-ghost btn-sm pin" onclick="togglePin(event,'${data.email}')" title="置顶">📍</button>
-              <button class="btn btn-ghost btn-sm del" onclick="deleteMailbox(event,'${data.email}')" title="删除">🗑️</button>
+              <button class="btn btn-ghost btn-sm pin" onclick="togglePin(event,'${escapeAttr(data.email)}')" title="置顶">📍</button>
+              <button class="btn btn-ghost btn-sm del" onclick="deleteMailbox(event,'${escapeAttr(data.email)}')" title="删除">🗑️</button>
             </div>
           </div>`;
         if (els.mbList){
@@ -781,14 +783,14 @@ els.gen.onclick = async () => {
     try{
       const createdAt = new Date().toISOString().replace('T',' ').slice(0,19);
       const html = `
-        <div class="mailbox-item" onclick="selectMailbox('${data.email}')">
+        <div class="mailbox-item" onclick="selectMailbox('${escapeAttr(data.email)}')">
           <div class="mailbox-content">
             <span class="address">${data.email}</span>
             <span class="time">${formatTs(createdAt)}</span>
           </div>
           <div class="mailbox-actions">
-            <button class="btn btn-ghost btn-sm pin" onclick="togglePin(event,'${data.email}')" title="置顶">📍</button>
-            <button class="btn btn-ghost btn-sm del" onclick="deleteMailbox(event,'${data.email}')" title="删除">🗑️</button>
+            <button class="btn btn-ghost btn-sm pin" onclick="togglePin(event,'${escapeAttr(data.email)}')" title="置顶">📍</button>
+            <button class="btn btn-ghost btn-sm del" onclick="deleteMailbox(event,'${escapeAttr(data.email)}')" title="删除">🗑️</button>
           </div>
         </div>`;
       if (els.mbList){
@@ -871,14 +873,14 @@ if (els.genName) {
       try {
         const createdAt = new Date().toISOString().replace('T',' ').slice(0,19);
         const html = `
-          <div class="mailbox-item" onclick="selectMailbox('${data.email}')">
+          <div class="mailbox-item" onclick="selectMailbox('${escapeAttr(data.email)}')">
             <div class="mailbox-content">
               <span class="address">${data.email}</span>
               <span class="time">${formatTs(createdAt)}</span>
             </div>
             <div class="mailbox-actions">
-              <button class="btn btn-ghost btn-sm pin" onclick="togglePin(event,'${data.email}')" title="置顶">📍</button>
-              <button class="btn btn-ghost btn-sm del" onclick="deleteMailbox(event,'${data.email}')" title="删除">🗑️</button>
+              <button class="btn btn-ghost btn-sm pin" onclick="togglePin(event,'${escapeAttr(data.email)}')" title="置顶">📍</button>
+              <button class="btn btn-ghost btn-sm del" onclick="deleteMailbox(event,'${escapeAttr(data.email)}')" title="删除">🗑️</button>
             </div>
           </div>`;
         if (els.mbList) {
@@ -1750,16 +1752,16 @@ async function loadMailboxes(options = {}){
       if (Array.isArray(mbCached)){
         const list = mailboxSortByLastUsed ? sortMailboxesByLastUsed(mbCached || []) : (mbCached || []);
         const html = list.map(x => (
-          `<div class="mailbox-item ${x.is_pinned ? 'pinned' : ''}" onclick="selectMailbox('${x.address}')">
+          `<div class="mailbox-item ${x.is_pinned ? 'pinned' : ''}" onclick="selectMailbox('${escapeAttr(x.address)}')">
             <div class="mailbox-content">
               <span class="address">${x.address}</span>
               <span class="time">${formatTs(x.created_at)}</span>
             </div>
             <div class="mailbox-actions">
-              <button class="btn btn-ghost btn-sm pin" onclick="togglePin(event,'${x.address}')" title="${x.is_pinned ? '取消置顶' : '置顶'}">
+              <button class="btn btn-ghost btn-sm pin" onclick="togglePin(event,'${escapeAttr(x.address)}')" title="${x.is_pinned ? '取消置顶' : '置顶'}">
                 ${x.is_pinned ? '📌' : '📍'}
               </button>
-              <button class="btn btn-ghost btn-sm del" onclick="deleteMailbox(event,'${x.address}')" title="删除">🗑️</button>
+              <button class="btn btn-ghost btn-sm del" onclick="deleteMailbox(event,'${escapeAttr(x.address)}')" title="删除">🗑️</button>
             </div>
           </div>`
         )).join('');
@@ -1773,16 +1775,16 @@ async function loadMailboxes(options = {}){
       if (!options.forceFresh && Array.isArray(mbPrefetched)){
         const list = mailboxSortByLastUsed ? sortMailboxesByLastUsed(mbPrefetched || []) : (mbPrefetched || []);
         const html = list.map(x => (
-          `<div class="mailbox-item ${x.is_pinned ? 'pinned' : ''}" onclick="selectMailbox('${x.address}')">
+          `<div class="mailbox-item ${x.is_pinned ? 'pinned' : ''}" onclick="selectMailbox('${escapeAttr(x.address)}')">
             <div class="mailbox-content">
               <span class="address">${x.address}</span>
               <span class="time">${formatTs(x.created_at)}</span>
             </div>
             <div class="mailbox-actions">
-              <button class="btn btn-ghost btn-sm pin" onclick="togglePin(event,'${x.address}')" title="${x.is_pinned ? '取消置顶' : '置顶'}">
+              <button class="btn btn-ghost btn-sm pin" onclick="togglePin(event,'${escapeAttr(x.address)}')" title="${x.is_pinned ? '取消置顶' : '置顶'}">
                 ${x.is_pinned ? '📌' : '📍'}
               </button>
-              <button class="btn btn-ghost btn-sm del" onclick="deleteMailbox(event,'${x.address}')" title="删除">🗑️</button>
+              <button class="btn btn-ghost btn-sm del" onclick="deleteMailbox(event,'${escapeAttr(x.address)}')" title="删除">🗑️</button>
             </div>
           </div>`
         )).join('');
@@ -1815,16 +1817,16 @@ async function loadMailboxes(options = {}){
       items = sortMailboxesByLastUsed(items);
     }
     const html = (items||[]).map(x => (
-      `<div class="mailbox-item ${x.is_pinned ? 'pinned' : ''}" onclick="selectMailbox('${x.address}')">
+      `<div class="mailbox-item ${x.is_pinned ? 'pinned' : ''}" onclick="selectMailbox('${escapeAttr(x.address)}')">
         <div class="mailbox-content">
           <span class="address">${x.address}</span>
           <span class="time">${formatTs(x.created_at)}</span>
         </div>
         <div class="mailbox-actions">
-          <button class="btn btn-ghost btn-sm pin" onclick="togglePin(event,'${x.address}')" title="${x.is_pinned ? '取消置顶' : '置顶'}">
+          <button class="btn btn-ghost btn-sm pin" onclick="togglePin(event,'${escapeAttr(x.address)}')" title="${x.is_pinned ? '取消置顶' : '置顶'}">
             ${x.is_pinned ? '📌' : '📍'}
           </button>
-          <button class="btn btn-ghost btn-sm del" onclick="deleteMailbox(event,'${x.address}')" title="删除">🗑️</button>
+          <button class="btn btn-ghost btn-sm del" onclick="deleteMailbox(event,'${escapeAttr(x.address)}')" title="删除">🗑️</button>
         </div>
       </div>`
     )).join('');
@@ -2221,7 +2223,7 @@ function switchToSent(){
 // 导出函数供路由管理器调用
 window.switchToInbox = switchToInbox;
 window.switchToSent = switchToSent;
-window.isSentView = isSentView;
+Object.defineProperty(window, 'isSentView', { get() { return isSentView; } });
 
 // 点击事件由 RouteManager 处理，这里只是备份
 if (els.tabInbox) els.tabInbox.onclick = switchToInbox;
@@ -2234,7 +2236,7 @@ window.showSentEmail = async (id) => {
     const email = await r.json();
     els.modalSubject.innerHTML = `
       <span class="modal-icon">📤</span>
-      <span>${email.subject || '(无主题)'}</span>
+      <span>${escapeHtml(email.subject || '(无主题)')}</span>
     `;
     const bodyHtml = (email.html_content || email.text_content || '').toString();
     els.modalContent.innerHTML = `
@@ -2243,12 +2245,12 @@ window.showSentEmail = async (id) => {
           <div class="meta-item">
             <span class="meta-icon">📤</span>
             <span class="meta-label">收件人</span>
-            <span class="meta-value">${email.recipients}</span>
+            <span class="meta-value">${escapeHtml(email.recipients || email.to_addrs || '')}</span>
           </div>
           <div class="meta-item">
             <span class="meta-icon">👤</span>
             <span class="meta-label">发件人</span>
-            <span class="meta-value">${(email.from_name ? email.from_name + ' ' : '')}&lt;${window.currentMailbox}&gt;</span>
+            <span class="meta-value">${escapeHtml((email.from_name ? email.from_name + ' ' : '') + '<' + (window.currentMailbox || '') + '>')}</span>
           </div>
           <div class="meta-item">
             <span class="meta-icon">🕐</span>
@@ -2258,7 +2260,7 @@ window.showSentEmail = async (id) => {
           <div class="meta-item">
             <span class="meta-icon">📌</span>
             <span class="meta-label">状态</span>
-            <span class="meta-value">${email.status || 'unknown'}</span>
+            <span class="meta-value">${escapeHtml(email.status || 'unknown')}</span>
           </div>
         </div>
         <div class="email-content-area">

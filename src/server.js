@@ -7,6 +7,14 @@ import { getDatabaseWithValidation } from './dbConnectionHelper.js';
 import { rateLimitMiddleware } from './rateLimit.js';
 import * as logger from './logger.js';
 
+/** 为前端静态资源响应添加安全头，防止 MIME 嗅探与点击劫持 */
+function addSecurityHeaders(res) {
+  const headers = new Headers(res.headers);
+  if (!headers.has('X-Content-Type-Options')) { headers.set('X-Content-Type-Options', 'nosniff'); }
+  if (!headers.has('X-Frame-Options')) { headers.set('X-Frame-Options', 'SAMEORIGIN'); }
+  return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+}
+
 export default {
   /**
    * HTTP请求处理器，处理所有到达Worker的HTTP请求
@@ -102,12 +110,12 @@ export default {
       const assetManager = createAssetManager();
       const assetResponse = await assetManager.handleAssetRequest(request, env, MAIL_DOMAINS);
       if (assetResponse) {
-        response = assetResponse;
+        response = addSecurityHeaders(assetResponse);
         logger.info('静态资源处理完成', {
           status: assetResponse.status,
           path: url.pathname
         }, logId);
-        return assetResponse;
+        return response;
       }
       
       // 处理未匹配的路由

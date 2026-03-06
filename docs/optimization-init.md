@@ -49,7 +49,7 @@ npm run d1:execute:remote
 ### database.js
 1. **initDatabase()**: 简化为轻量级检查
 2. **performFirstTimeSetup()**: 新增首次启动设置函数
-3. **setupDatabase()**: 新增完整数据库设置函数（可供手动执行）
+3. **手动初始化**：完整表结构通过 `d1-init.sql` / `d1-init-basic.sql` 在首次部署时执行，运行时仅使用 `initDatabase()` 做轻量检查与列迁移。
 4. **ensureUsersTables()**: 简化为仅创建表
 5. **ensureSentEmailsTable()**: 简化为仅创建表
 6. **recordSentEmail()**: 移除回退创建表逻辑

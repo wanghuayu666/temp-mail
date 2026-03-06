@@ -9,7 +9,7 @@
 - 令牌携带方式（任选其一）：
   - Header（标准）：`Authorization: Bearer <JWT_TOKEN>`
   - Header（自定义）：`X-Admin-Token: <JWT_TOKEN>`
-  - Query：`?admin_token=<JWT_TOKEN>`
+  - （出于安全考虑，已不再支持通过 URL 查询参数传递令牌）
 
 - 生效范围：
   - 所有受保护的后端接口：`/api/*`
@@ -31,11 +31,6 @@
     ```bash
     curl -H "X-Admin-Token: <JWT_TOKEN>" https://your.domain/api/domains
     ```
-  - GET（Query）：
-    ```
-    GET /api/session?admin_token=<JWT_TOKEN>
-    ```
-
 - 风险与建议（务必阅读）：
   - 严格保密 `JWT_TOKEN`，并定期更换
 

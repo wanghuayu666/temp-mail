@@ -17,7 +17,7 @@ async function preDeployCheck() {
         
         if (!dbList.includes('temp_mail_db')) {
             console.log('❌ 数据库 temp_mail_db 不存在');
-            console.log('💡 建议运行: node database-recovery.js');
+            console.log('💡 建议运行: npx wrangler d1 execute temp_mail_db --file=./d1-init.sql');
             process.exit(1);
         }
         
@@ -27,7 +27,7 @@ async function preDeployCheck() {
         console.log('🗃️  检查数据库表结构...');
         const tableCheck = execSync('npx wrangler d1 execute temp_mail_db --command="SELECT name FROM sqlite_master WHERE type=\"table\";"', { encoding: 'utf8' });
         
-        const requiredTables = ['mailboxes', 'messages', 'domains', 'attachments'];
+        const requiredTables = ['mailboxes', 'messages', 'domains'];
         const existingTables = tableCheck.match(/\| ([a-z_]+) \|/g)?.map(t => t.replace(/\| ([a-z_]+) \|/, '$1')) || [];
         
         const missingTables = requiredTables.filter(table => !existingTables.includes(table));

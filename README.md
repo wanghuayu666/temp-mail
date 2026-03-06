@@ -14,6 +14,7 @@
   - [📧 配置邮件路由](#-配置邮件路由重要)
 - [🛠️ 环境变量配置](#️-环境变量配置)
 - [👨‍💻 开发者指南](#-开发者指南)
+  - [🚀 入口与构建](#-入口与构建)
   - [🗄️ 数据库结构](#️-数据库结构)
   - [🗂️ Wrangler 配置](#️-wrangler-配置)
   - [🗄️ D1 数据库操作](#️-d1-数据库操作)
@@ -277,7 +278,9 @@ npm run deploy
 - **Worker 运行时变量**：在 Cloudflare Workers 上运行服务时必须/可选的配置。
 - **部署辅助变量**：仅在使用 GitHub Actions 等自动化脚本时需要的变量。
 
-> 如果你只想“照着表填变量”，可以先看这张速查表，再往下看详细解释。
+> **快速配置**：项目根目录提供 **`env.example`**，列出所有变量及简短说明。本地开发可复制为 **`.dev.vars`**（Wrangler 会自动读取），部署时在 Cloudflare 控制台或 GitHub Secrets 中配置对应项即可。
+
+> 如果你只想“照着表填变量”，可以先看下面这张速查表，再往下看详细解释。
 
 | 变量名 | 是否必需 | 作用一句话说明 | 一般在哪里配 |
 | ------ | -------- | --------------- | ------------ |
@@ -435,6 +438,11 @@ npm run deploy
 
 - **blocked_senders** 表：黑名单规则（按邮箱/域名匹配）
 
+## 🚀 入口与构建
+
+- **运行入口**：Wrangler 使用 **`src/server.js`** 作为 Worker 入口（见 `wrangler.toml` 中的 `main = "src/server.js"`）。
+- **部署方式**：直接部署源码即可，**无需执行 `npm run build`**。`npm run build` 为可选（用于生成 `worker.js` 等），当前默认部署流程不依赖构建产物。
+
 ## 🗂️ Wrangler 配置
 
 使用 Wrangler v4 配置：
@@ -485,10 +493,9 @@ npx wrangler d1 execute temp_mail_db --local --command="DELETE FROM messages; DE
 ### 根管理员令牌（Root Admin Override）
 
 - 当请求携带与环境变量 `JWT_TOKEN` 相同的令牌时，将被视为最高管理员（strictAdmin），可绕过常规身份验证。
-- 支持三种携带方式（任一即可）：
+- 支持两种携带方式（任一即可）：
   - Authorization 头：`Authorization: Bearer <JWT_TOKEN>`
   - 自定义头：`X-Admin-Token: <JWT_TOKEN>`
-  - URL 查询参数：`?admin_token=<JWT_TOKEN>`
 - 适用范围：所有 `/api/*` 接口、`/api/session`、`/receive` 以及管理页访问判定。
 
 完整接口说明已迁移至独立文档，包含登录认证、邮箱与邮件、发件（Resend）以及"用户管理"相关接口。
@@ -508,7 +515,7 @@ npx wrangler d1 execute temp_mail_db --local --command="DELETE FROM messages; DE
 
 - **代码隔离**：所有用户输入都经过严格验证和转义
 - **环境变量保护**：敏感信息通过环境变量管理，不硬编码在代码中
-- **自动测试**：持续集成包含安全漏洞扫描
+- **安全响应头**：前端静态资源响应自动添加 `X-Content-Type-Options: nosniff`、`X-Frame-Options: SAMEORIGIN`，降低 MIME 嗅探与点击劫持风险
 - **权限控制**：严格的访问控制机制，区分普通用户和管理员权限
 - **JWT 认证**：使用 JWT 实现安全的会话管理和跨域认证
 - **输入验证**：对所有用户输入进行严格验证和过滤，防止注入攻击
@@ -534,14 +541,14 @@ npm run lint:fix
 # 类型检查
 npm run type-check
  
-# 构建项目
+# 构建项目（可选，部署不依赖此步骤）
 npm run build
 ```
  
 目前项目推荐的质量检查包括：
 - **代码检查**：使用 ESLint 保持代码风格与基本问题检测
 - **类型检查**：通过 TypeScript 做静态类型校验
-- **构建验证**：确保代码能够正确打包并在 Workers 环境运行
+- **部署说明**：生产/预览部署使用 `src/server.js` 直接运行，无需先执行 build
 
 ## 📊 监控与告警
 

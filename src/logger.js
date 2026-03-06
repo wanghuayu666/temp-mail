@@ -44,12 +44,10 @@ function formatLog(level, message, context = {}, logId = null) {
     message: message || '',
     context: {
       ...context,
-      // 添加环境信息
-      environment: process.env.NODE_ENV || 'production',
-      // 添加Worker信息
+      environment: (typeof process !== 'undefined' && process.env?.NODE_ENV) || 'production',
       worker: {
-        region: process.env.REGION || 'unknown',
-        version: process.env.VERSION || 'unknown'
+        region: (typeof process !== 'undefined' && process.env?.REGION) || 'unknown',
+        version: (typeof process !== 'undefined' && process.env?.VERSION) || 'unknown'
       }
     }
   };
