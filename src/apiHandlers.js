@@ -2075,7 +2075,17 @@ export async function handleEmailReceive(requestOrData, db, env) {
       }
     } catch (err) { void err; objectKey = ''; }
 
-    const previewBase = (text || html.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
+    // 预览文本：优先用纯文本；若只有 HTML，则剔除 style/script 内容后再去标签，避免把整段 CSS（如 @media）残留进 Telegram 预览
+    let previewBaseRaw = '';
+    if (text) {
+      previewBaseRaw = text;
+    } else {
+      const safeHtml = String(html || '')
+        .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+        .replace(/<script[\s\S]*?<\/script>/gi, ' ');
+      previewBaseRaw = safeHtml.replace(/<[^>]+>/g, ' ');
+    }
+    const previewBase = String(previewBaseRaw || '').replace(/\s+/g, ' ').trim();
     const preview = String(previewBase || '').slice(0, 120);
     let verificationCode = '';
     let loginLink = '';
